@@ -84,6 +84,15 @@ public class DeviceTemplateParserProviderImpl implements DeviceTemplateParserPro
 
     @Override
     public Device createDevice(String integration,
+                               Long deviceTemplateId,
+                               String deviceIdentifier,
+                               String deviceName,
+                               BiFunction<Device, Map<String, Object>, Boolean> beforeSaveDevice) {
+        return deviceTemplateParser.createDevice(integration, deviceTemplateId, deviceIdentifier, deviceName, beforeSaveDevice);
+    }
+
+    @Override
+    public Device createDevice(String integration,
                               String vendor,
                               String model,
                               String deviceIdentifier,

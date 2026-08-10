@@ -1,6 +1,7 @@
 package com.milesight.beaveriot.context.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.milesight.beaveriot.base.utils.StringUtils;
 import com.milesight.beaveriot.context.integration.model.config.EntityConfig;
@@ -94,6 +95,71 @@ public class DeviceTemplateModel {
     public static class Codec {
         private String id;
         private String ref;
+        /**
+         * Inline codec source, used by custom (non-blueprint) device templates.
+         * When set, the codec is executed directly instead of being resolved from
+         * a blueprint library, so a device model that is not published in the
+         * blueprint repository can still decode binary payloads.
+         */
+        private String code;
+        /**
+         * Entry function name within {@link #code}.
+         */
+        private String entry;
+        /**
+         * Optional entry function used to encode downlinks. Left unset for uplink-only
+         * devices, in which case no downlink encoding is available.
+         */
+        private String encodeEntry;
+        /**
+         * Ordered arguments passed to {@link #entry}. Exactly one must be marked as the
+         * payload, which receives the raw data; the others are resolved by id from the
+         * caller's argument context (the LoRaWAN uplink supplies {@code fPort}).
+         * <p>
+         * When omitted, {@link #getEffectiveArguments()} supplies the common
+         * {@code (fPort, payload)} decoder signature.
+         */
+        private List<CodecArgument> arguments;
+
+        /**
+         * Whether this codec carries its own source rather than referencing a blueprint codec.
+         */
+        @JsonIgnore
+        public boolean isInline() {
+            return !StringUtils.isEmpty(code) && !StringUtils.isEmpty(entry);
+        }
+
+        /**
+         * Declared arguments, or the default {@code (fPort, payload)} signature used by
+         * most LoRaWAN decoders when none are declared.
+         */
+        @JsonIgnore
+        public List<CodecArgument> getEffectiveArguments() {
+            if (!CollectionUtils.isEmpty(arguments)) {
+                return arguments;
+            }
+            return List.of(CodecArgument.of("fPort", false), CodecArgument.of("payload", true));
+        }
+    }
+
+    @Data
+    public static class CodecArgument {
+        /**
+         * Argument name; for non-payload arguments this is the key looked up in the
+         * caller's argument context.
+         */
+        private String id;
+        /**
+         * Whether this argument receives the raw payload.
+         */
+        private boolean payload;
+
+        public static CodecArgument of(String id, boolean payload) {
+            CodecArgument argument = new CodecArgument();
+            argument.id = id;
+            argument.payload = payload;
+            return argument;
+        }
     }
 
     @Data

@@ -25,6 +25,7 @@ public class AttributeBuilder {
     public static final String ATTRIBUTE_FORMAT_VALUE_IMAGE_URL = "IMAGE:URL";
     public static final String ATTRIBUTE_FORMAT_VALUE_IMAGE_BASE64 = "IMAGE:BASE64";
     public static final String ATTRIBUTE_FORMAT_VALUE_REGEX = "REGEX";
+    public static final String ATTRIBUTE_FORMAT_VALUE_PASSWORD = "PASSWORD";
     public static final String ATTRIBUTE_FRACTION_DIGITS = "fraction_digits";
     public static final String ATTRIBUTE_OPTIONAL = "optional";
     public static final String ATTRIBUTE_LENGTH_RANGE = "length_range";

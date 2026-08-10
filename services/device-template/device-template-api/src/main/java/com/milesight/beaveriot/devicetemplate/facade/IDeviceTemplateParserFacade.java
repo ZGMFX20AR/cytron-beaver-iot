@@ -23,6 +23,16 @@ public interface IDeviceTemplateParserFacade {
     DeviceTemplateOutputResult output(String deviceKey, ExchangePayload payload);
     DeviceTemplateOutputResult output(String deviceKey, ExchangePayload payload, Map<String, Object> codecArgContext);
     Device createDevice(String integration, Long deviceTemplateId, String deviceIdentifier, String deviceName);
+
+    /**
+     * Create and persist a device from a stored device template, letting the caller enrich
+     * it first. Used to onboard custom device models that have no blueprint backing.
+     */
+    Device createDevice(String integration,
+                        Long deviceTemplateId,
+                        String deviceIdentifier,
+                        String deviceName,
+                        BiFunction<Device, Map<String, Object>, Boolean> beforeSaveDevice);
     Device createDevice(String integration,
                         String vendor,
                         String model,

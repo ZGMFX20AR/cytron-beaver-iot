@@ -1,0 +1,29 @@
+name: Notify beaver-iot-docker to rebuild
+
+# This repo doesn't build its own Docker image - beaver-iot-docker does, since it also
+# needs beaver-iot-integrations and beaver-iot-web to produce a complete image. This
+# workflow's only job is telling that repo "something changed, rebuild", by firing a
+# repository_dispatch event it listens for.
+#
+# Requires a secret named DISPATCH_TOKEN: a personal access token (classic, `repo` +
+# `workflow` scopes, or a fine-grained token with contents:read + actions:write on
+# beaver-iot-docker) added to this repo's Settings -> Secrets and variables -> Actions.
+# The default GITHUB_TOKEN can't be used here - it has no permission to trigger workflows
+# in a different repository.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch build to beaver-iot-docker
+        env:
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository_owner }}/beaver-iot-docker/dispatches \
+            -f event_type=source-updated \
+            -f "client_payload[branch]=${{ github.ref_name }}" \
+            -f "client_payload[source]=beaver-iot"

@@ -316,8 +316,13 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
         JsonNode jsonNode;
         BlueprintLibrary blueprintLibrary = null;
         if (data instanceof byte[] byteData) {
-            blueprintLibrary = getBlueprintLibrary(deviceTemplate);
-            IDeviceCodecExecutorFacade deviceCodecExecutorFacade = codecExecutorFacade.getDeviceCodecExecutor(blueprintLibrary, deviceTemplate.getVendor(), deviceTemplate.getModel());
+            // A custom device model carries its own codec and has no blueprint backing it,
+            // so try the inline codec before falling back to blueprint resolution.
+            IDeviceCodecExecutorFacade deviceCodecExecutorFacade = codecExecutorFacade.getInlineDeviceCodecExecutor(deviceTemplateModel);
+            if (deviceCodecExecutorFacade == null) {
+                blueprintLibrary = getBlueprintLibrary(deviceTemplate);
+                deviceCodecExecutorFacade = codecExecutorFacade.getDeviceCodecExecutor(blueprintLibrary, deviceTemplate.getVendor(), deviceTemplate.getModel());
+            }
             if (deviceCodecExecutorFacade == null) {
                 throw ServiceException.with(ServerErrorCode.DEVICE_DATA_DECODE_FAILED.getErrorCode(), ServerErrorCode.DEVICE_DATA_DECODE_FAILED.getErrorMessage()).build();
             }
@@ -389,6 +394,13 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
     }
 
     private BlueprintLibrary getBlueprintLibrary(DeviceTemplate deviceTemplate) {
+        // A custom device template is not backed by a blueprint library, so there is
+        // nothing to resolve. Looking one up by a null id would fail the repository's
+        // argument check instead of simply yielding "no library".
+        if (deviceTemplate.getBlueprintLibraryId() == null) {
+            return null;
+        }
+
         BlueprintLibrary blueprintLibrary = blueprintLibraryFacade.findById(deviceTemplate.getBlueprintLibraryId());
         if (blueprintLibrary == null) {
             throw ServiceException.with(ServerErrorCode.BLUEPRINT_LIBRARY_NOT_FOUND.getErrorCode(), ServerErrorCode.BLUEPRINT_LIBRARY_NOT_FOUND.formatMessage(deviceTemplate.getBlueprintLibraryId())).build();
@@ -494,15 +506,21 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
 
             JsonNode outputData = buildJsonNode(deviceTemplateModel.getDefinition().getOutput(), deviceKey, payload);
 
-            BlueprintLibrary blueprintLibrary = getBlueprintLibrary(deviceTemplate);
-            IDeviceCodecExecutorFacade deviceCodecExecutorFacade = codecExecutorFacade.getDeviceCodecExecutor(blueprintLibrary, deviceTemplate.getVendor(), deviceTemplate.getModel());
+            // Custom device models supply their own codec; fall back to the blueprint one.
+            IDeviceCodecExecutorFacade deviceCodecExecutorFacade = codecExecutorFacade.getInlineDeviceCodecExecutor(deviceTemplateModel);
+            if (deviceCodecExecutorFacade == null) {
+                BlueprintLibrary blueprintLibrary = getBlueprintLibrary(deviceTemplate);
+                deviceCodecExecutorFacade = codecExecutorFacade.getDeviceCodecExecutor(blueprintLibrary, deviceTemplate.getVendor(), deviceTemplate.getModel());
+            }
             if (deviceCodecExecutorFacade == null) {
                 result.setOutput(outputData);
                 return result;
             }
 
             byte[] encodedData = deviceCodecExecutorFacade.encode(outputData, codecArgContext);
-            result.setOutput(encodedData);
+            // An uplink-only custom codec declares no encoder, so fall back to the raw
+            // payload rather than emitting a null downlink.
+            result.setOutput(encodedData == null ? outputData : encodedData);
             return result;
         } catch (Exception e) {
             log.error(e.getMessage());
@@ -523,6 +541,33 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
             }
         });
         return rootNode;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public Device createDevice(String integration,
+                               Long deviceTemplateId,
+                               String deviceIdentifier,
+                               String deviceName,
+                               BiFunction<Device, Map<String, Object>, Boolean> beforeSaveDevice) {
+        try {
+            DeviceTemplate deviceTemplate = getAndValidateDeviceTemplate(integration, deviceTemplateId);
+            return createDevice(integration,
+                    null,
+                    deviceTemplate,
+                    deviceIdentifier,
+                    deviceName,
+                    true,
+                    beforeSaveDevice,
+                    BlueprintCreationStrategy.NEVER);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            if (e instanceof ServiceException || e instanceof MultipleErrorException) {
+                throw e;
+            } else {
+                throw ServiceException.with(ErrorCode.SERVER_ERROR.getErrorCode(), e.getMessage()).build();
+            }
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

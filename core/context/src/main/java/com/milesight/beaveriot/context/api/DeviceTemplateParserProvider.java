@@ -27,6 +27,20 @@ public interface DeviceTemplateParserProvider {
     DeviceTemplateOutputResult output(String deviceKey, ExchangePayload payload);
     DeviceTemplateOutputResult output(String deviceKey, ExchangePayload payload, Map<String, Object> codecArgContext);
     Device createDevice(String integration, Long deviceTemplateId, String deviceId, String deviceName);
+
+    /**
+     * Create and persist a device from a stored device template, giving the caller a chance
+     * to enrich it first. Mirrors the vendor/model variant but resolves the template directly,
+     * so integrations can onboard custom device models that are not published in a blueprint.
+     *
+     * @param beforeSaveDevice receives the built device and the template metadata; returning
+     *                         {@code false} aborts creation
+     */
+    Device createDevice(String integration,
+                        Long deviceTemplateId,
+                        String deviceIdentifier,
+                        String deviceName,
+                        BiFunction<Device, Map<String, Object>, Boolean> beforeSaveDevice);
     Device createDevice(String integration,
                         String vendor,
                         String model,

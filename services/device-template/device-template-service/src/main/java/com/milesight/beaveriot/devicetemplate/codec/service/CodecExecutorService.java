@@ -79,6 +79,42 @@ public class CodecExecutorService implements ICodecExecutorFacade {
         return DeviceCodecExecutorService.of(decoderChain, encoderChain);
     }
 
+    @Override
+    public IDeviceCodecExecutorFacade getInlineDeviceCodecExecutor(DeviceTemplateModel deviceTemplateModel) {
+        if (deviceTemplateModel == null) {
+            return null;
+        }
+
+        DeviceTemplateModel.Codec codec = deviceTemplateModel.getCodec();
+        if (codec == null || !codec.isInline()) {
+            return null;
+        }
+
+        List<Argument> arguments = codec.getEffectiveArguments().stream()
+                .map(argument -> Argument.of(argument.getId(), argument.isPayload()))
+                .toList();
+
+        // The same source provides both directions: the entry function decodes, and the
+        // encoder chain is only exercised when a downlink is actually sent.
+        CodecExecutorDecoderChain decoderChain = CodecExecutorDecoderChain.builder().build();
+        decoderChain.addExecutor(CodecExecutor.builder()
+                .code(codec.getCode())
+                .entry(codec.getEntry())
+                .arguments(arguments)
+                .build());
+
+        CodecExecutorEncoderChain encoderChain = CodecExecutorEncoderChain.builder().build();
+        if (!StringUtils.isEmpty(codec.getEncodeEntry())) {
+            encoderChain.addExecutor(CodecExecutor.builder()
+                    .code(codec.getCode())
+                    .entry(codec.getEncodeEntry())
+                    .arguments(arguments)
+                    .build());
+        }
+
+        return DeviceCodecExecutorService.of(decoderChain, encoderChain);
+    }
+
     private <T extends CodecExecutorChain> T createCodecExecutorChain(BlueprintLibrary blueprintLibrary, String vendor, Supplier<T> chainBuilder, List<BlueprintDeviceCodec.Codec> chain) {
         T codecExecutorChain = chainBuilder.get();
         for (BlueprintDeviceCodec.Codec codec : chain) {

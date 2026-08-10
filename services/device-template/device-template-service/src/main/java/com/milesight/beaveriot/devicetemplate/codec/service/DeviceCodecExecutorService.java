@@ -40,6 +40,10 @@ public class DeviceCodecExecutorService implements IDeviceCodecExecutorFacade {
     @Override
     public byte[] encode(JsonNode data, Map<String, Object> argContext) {
         try {
+            // No encoder configured (uplink-only codec); caller falls back to the raw payload.
+            if (encoderChain == null) {
+                return null;
+            }
             return encoderChain.execute(data, argContext);
         } catch (Exception e) {
             log.error("DeviceCodecExecutor encode error", e);

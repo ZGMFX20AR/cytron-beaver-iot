@@ -265,6 +265,18 @@
             <version>${project.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.milesight.beaveriot.integrations</groupId>
+            <artifactId>iriv-ioc-mqtt-gateway</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.milesight.beaveriot.integrations</groupId>
+            <artifactId>llm-integration</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- unit test -->
         <!--<dependency>
             <groupId>org.junit.platform</groupId>
