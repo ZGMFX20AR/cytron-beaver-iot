@@ -8,6 +8,7 @@ import com.milesight.beaveriot.base.enums.ErrorCode;
 import com.milesight.beaveriot.base.exception.ServiceException;
 import com.milesight.beaveriot.base.page.Sorts;
 import com.milesight.beaveriot.blueprint.facade.IBlueprintFacade;
+import com.milesight.beaveriot.context.api.DeviceTemplateParserProvider;
 import com.milesight.beaveriot.context.api.EntityServiceProvider;
 import com.milesight.beaveriot.context.api.EntityValueServiceProvider;
 import com.milesight.beaveriot.context.api.IntegrationServiceProvider;
@@ -111,6 +112,10 @@ public class DeviceService implements IDeviceFacade, IDeviceResponseFacade {
 
     @Autowired
     private IEntityTemplateFacade entityTemplateFacade;
+
+    @Lazy
+    @Autowired
+    private DeviceTemplateParserProvider deviceTemplateParserProvider;
 
     @Lazy
     @Autowired
@@ -314,6 +319,31 @@ public class DeviceService implements IDeviceFacade, IDeviceResponseFacade {
                         .eq(DevicePO.Fields.id, id))
                 .map(deviceConverter::convertPO)
                 .orElse(null);
+    }
+
+    /**
+     * Creates any entities the device's template currently defines but that this device
+     * doesn't have yet - e.g. after a device model was edited to add fields after this
+     * device was already created from it. Existing entities are left untouched.
+     *
+     * @return the identifiers of the entities that were newly created (empty if the
+     *         device was already up to date)
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> resyncDeviceEntities(Long deviceId) {
+        Device device = findById(deviceId);
+        if (device == null) {
+            throw ServiceException.with(ErrorCode.DATA_NO_FOUND.getErrorCode(), "device not found")
+                    .status(HttpStatus.BAD_REQUEST.value())
+                    .build();
+        }
+
+        List<Entity> newEntities = deviceTemplateParserProvider.resyncDeviceEntities(device.getKey());
+        if (CollectionUtils.isEmpty(newEntities)) {
+            return List.of();
+        }
+
+        return newEntities.stream().map(Entity::getIdentifier).toList();
     }
 
     @Override

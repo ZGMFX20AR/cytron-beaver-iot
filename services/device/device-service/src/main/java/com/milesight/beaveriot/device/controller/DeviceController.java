@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/device")
 public class DeviceController {
@@ -110,5 +112,17 @@ public class DeviceController {
             deviceLocationService.clearLocation(device);
         }
         return ResponseBuilder.success();
+    }
+
+    /**
+     * Creates any entities the device's template currently defines but the device doesn't
+     * have yet - for when a device model was edited (fields added) after devices were
+     * already created from it. Existing entities are untouched. Returns the identifiers of
+     * whatever got newly created, empty if the device was already up to date.
+     */
+    @OperationPermission(codes = OperationPermissionCode.DEVICE_EDIT)
+    @PostMapping("/{deviceId}/resync-entities")
+    public ResponseBody<List<String>> resyncDeviceEntities(@PathVariable("deviceId") Long deviceId) {
+        return ResponseBuilder.success(deviceService.resyncDeviceEntities(deviceId));
     }
 }

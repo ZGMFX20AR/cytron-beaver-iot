@@ -19,6 +19,7 @@ import com.milesight.beaveriot.context.api.DeviceServiceProvider;
 import com.milesight.beaveriot.context.api.EntityServiceProvider;
 import com.milesight.beaveriot.context.api.IntegrationServiceProvider;
 import com.milesight.beaveriot.context.constants.IntegrationConstants;
+import com.milesight.beaveriot.context.integration.enums.AttachTargetType;
 import com.milesight.beaveriot.context.i18n.locale.LocaleContext;
 import com.milesight.beaveriot.context.i18n.message.MergedResourceBundleMessageSource;
 import com.milesight.beaveriot.context.integration.model.BlueprintCreationStrategy;
@@ -71,6 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * author: Luxb
@@ -849,6 +851,54 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
         } catch (Exception e) {
             throw ServiceException.with(ErrorCode.SERVER_ERROR.getErrorCode(), e.getMessage()).build();
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public List<Entity> resyncDeviceEntities(String deviceKey) {
+        Device device = deviceServiceProvider.findByKey(deviceKey);
+        if (device == null) {
+            throw ServiceException.with(ServerErrorCode.DEVICE_NOT_FOUND.getErrorCode(), ServerErrorCode.DEVICE_NOT_FOUND.getErrorMessage()).build();
+        }
+
+        String deviceTemplateKey = device.getTemplate();
+        if (deviceTemplateKey == null) {
+            return Collections.emptyList();
+        }
+
+        DeviceTemplate deviceTemplate = deviceTemplateService.findByKey(deviceTemplateKey);
+        String deviceTemplateContent = getContentAndValidateDeviceTemplate(device.getIntegrationId(), deviceTemplate);
+        if (deviceTemplateContent == null) {
+            return Collections.emptyList();
+        }
+
+        DeviceTemplateModel deviceTemplateModel = parse(deviceTemplateContent);
+        List<EntityConfig> initialEntities = deviceTemplateModel.getInitialEntities();
+        if (CollectionUtils.isEmpty(initialEntities)) {
+            return Collections.emptyList();
+        }
+
+        // Top-level identifiers already persisted for this device - a present parent identifier
+        // means that whole EntityConfig (including any children) is considered already synced.
+        Set<String> existingIdentifiers = entityServiceProvider.findByTargetId(AttachTargetType.DEVICE, device.getId().toString())
+                .stream()
+                .map(Entity::getIdentifier)
+                .collect(Collectors.toSet());
+
+        List<EntityConfig> missingEntityConfigs = initialEntities.stream()
+                .filter(entityConfig -> !existingIdentifiers.contains(entityConfig.getIdentifier()))
+                .toList();
+        if (missingEntityConfigs.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Entity> missingEntities = buildDeviceEntities(device.getIntegrationId(), device.getKey(), missingEntityConfigs);
+        if (CollectionUtils.isEmpty(missingEntities)) {
+            return Collections.emptyList();
+        }
+
+        entityServiceProvider.batchSave(missingEntities);
+        return missingEntities;
     }
 
     private JsonNode parseJsonNode(DeviceTemplateModel.Definition.OutputJsonObject outputJsonObject, String deviceKey, ExchangePayload payload, String parentKey) {

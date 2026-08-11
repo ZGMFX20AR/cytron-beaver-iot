@@ -4,6 +4,7 @@ import com.milesight.beaveriot.context.api.DeviceTemplateParserProvider;
 import com.milesight.beaveriot.context.integration.model.BlueprintCreationStrategy;
 import com.milesight.beaveriot.context.integration.model.Device;
 import com.milesight.beaveriot.context.integration.model.DeviceTemplate;
+import com.milesight.beaveriot.context.integration.model.Entity;
 import com.milesight.beaveriot.context.integration.model.ExchangePayload;
 import com.milesight.beaveriot.context.model.DeviceTemplateModel;
 import com.milesight.beaveriot.context.model.response.DeviceTemplateInputResult;
@@ -11,6 +12,7 @@ import com.milesight.beaveriot.context.model.response.DeviceTemplateOutputResult
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -126,5 +128,10 @@ public class DeviceTemplateParserProviderImpl implements DeviceTemplateParserPro
     @Override
     public DeviceTemplate getLatestDeviceTemplate(String vendor, String model) {
         return deviceTemplateParser.getLatestDeviceTemplate(vendor, model);
+    }
+
+    @Override
+    public List<Entity> resyncDeviceEntities(String deviceKey) {
+        return deviceTemplateParser.resyncDeviceEntities(deviceKey);
     }
 }
