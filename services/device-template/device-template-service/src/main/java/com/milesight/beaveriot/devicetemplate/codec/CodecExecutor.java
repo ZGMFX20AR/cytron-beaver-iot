@@ -55,6 +55,9 @@ public class CodecExecutor {
             context.eval(LANGUAGE_ID, code);
             Value binding = context.getBindings(LANGUAGE_ID);
             Value func = binding.getMember(entry);
+            if (func == null || !func.canExecute()) {
+                throw new IllegalArgumentException("Entry function '" + entry + "' not found in the code");
+            }
             List<Object> args = buildArgs(context, data, argContext);
             return execute(func, args.toArray());
         }
@@ -63,7 +66,11 @@ public class CodecExecutor {
     @SneakyThrows
     private Object execute(Value function, Object... args) {
         if (returnType == ReturnType.JSON) {
-            String jsonString = mapper.writeValueAsString(function.execute(args).as(Map.class));
+            Value result = function.execute(args);
+            if (result == null || result.isNull() || !(result.hasMembers() || result.hasArrayElements())) {
+                throw new IllegalArgumentException("Decoder must return an object, got: " + describeType(result));
+            }
+            String jsonString = mapper.writeValueAsString(result.as(Map.class));
             return JSON.readTree(jsonString);
         } else if (returnType == ReturnType.BYTES) {
             Integer[] intArray = function.execute(args).as(Integer[].class);
@@ -74,6 +81,22 @@ public class CodecExecutor {
             return byteArray;
         } else {
             return null;
+        }
+    }
+
+    private static String describeType(Value value) {
+        if (value == null || value.isNull()) {
+            return "null";
+        } else if (value.isString()) {
+            return "string";
+        } else if (value.isNumber()) {
+            return "number";
+        } else if (value.isBoolean()) {
+            return "boolean";
+        } else if (value.hasArrayElements()) {
+            return "array";
+        } else {
+            return "undefined";
         }
     }
 
