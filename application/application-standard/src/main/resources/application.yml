@@ -204,6 +204,11 @@ oauth2:
     - "/actuator/**"
     - "/db-resource/**"
     - "/workflow-http-in/**"
+    # Camera relay only. Its consumer is a browser <img>, which cannot carry a bearer
+    # token, so requiring auth would make the feature impossible rather than secure.
+    # Scoped to /streams/** on purpose: the sibling /edgeai-stream/sources/** endpoints
+    # that manage boxes and their API keys stay authenticated.
+    - "/edgeai-stream/streams/**"
 
 mqtt:
   broker:

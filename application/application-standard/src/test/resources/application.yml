@@ -175,6 +175,7 @@ oauth2:
     - "/public/**"
     - "/actuator/**"
     - "/workflow-http-in/**"
+    - "/edgeai-stream/streams/**"
 
 mqtt:
   broker:
