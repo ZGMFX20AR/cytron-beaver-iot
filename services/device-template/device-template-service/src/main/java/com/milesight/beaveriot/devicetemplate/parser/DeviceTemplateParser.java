@@ -70,8 +70,10 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -878,27 +880,54 @@ public class DeviceTemplateParser implements IDeviceTemplateParserFacade {
             return Collections.emptyList();
         }
 
-        // Top-level identifiers already persisted for this device - a present parent identifier
-        // means that whole EntityConfig (including any children) is considered already synced.
-        Set<String> existingIdentifiers = entityServiceProvider.findByTargetId(AttachTargetType.DEVICE, device.getId().toString())
+        // Top-level entities already persisted for this device, keyed by identifier. Children
+        // ride along with their parent, so a present parent identifier still stands in for its
+        // whole EntityConfig.
+        Map<String, Entity> existingByIdentifier = entityServiceProvider.findByTargetId(AttachTargetType.DEVICE, device.getId().toString())
                 .stream()
-                .map(Entity::getIdentifier)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toMap(Entity::getIdentifier, Function.identity(), (first, duplicate) -> first));
 
-        List<EntityConfig> missingEntityConfigs = initialEntities.stream()
-                .filter(entityConfig -> !existingIdentifiers.contains(entityConfig.getIdentifier()))
+        List<Entity> templateEntities = buildDeviceEntities(device.getIntegrationId(), device.getKey(), initialEntities);
+        if (CollectionUtils.isEmpty(templateEntities)) {
+            return Collections.emptyList();
+        }
+
+        // A device's entities are built once, at creation time, so an entity that already
+        // exists keeps whatever the template said back then. Two kinds of drift have to be
+        // reconciled: entities the template gained afterwards, and display metadata the
+        // template changed on entities that already exist - the latter previously had no
+        // path to a created device at all, so editing an entity's unit updated the model
+        // while every device kept showing the old one.
+        List<Entity> outdatedEntities = templateEntities.stream()
+                .filter(templateEntity -> {
+                    Entity existing = existingByIdentifier.get(templateEntity.getIdentifier());
+                    return existing == null || hasDisplayMetadataDrift(existing, templateEntity);
+                })
                 .toList();
-        if (missingEntityConfigs.isEmpty()) {
+        if (outdatedEntities.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<Entity> missingEntities = buildDeviceEntities(device.getIntegrationId(), device.getKey(), missingEntityConfigs);
-        if (CollectionUtils.isEmpty(missingEntities)) {
-            return Collections.emptyList();
-        }
+        // batchSave upserts by entity key, reusing the persisted row's id and createdAt,
+        // so entities that already exist are updated in place and their recorded values
+        // are left untouched.
+        entityServiceProvider.batchSave(outdatedEntities);
+        return outdatedEntities;
+    }
 
-        entityServiceProvider.batchSave(missingEntities);
-        return missingEntities;
+    /**
+     * Whether the template's copy of an entity carries display metadata differing from what
+     * is currently persisted for the device.
+     * <p>
+     * Deliberately limited to name and attributes - attributes being where unit lives.
+     * Both are presentation-only, so refreshing them onto an existing entity cannot
+     * invalidate values already recorded against it. Value type is pointedly not compared:
+     * rewriting it underneath stored historical values is a different and much riskier
+     * operation than relabelling one, and is not something a unit edit should trigger.
+     */
+    private static boolean hasDisplayMetadataDrift(Entity existing, Entity fromTemplate) {
+        return !Objects.equals(existing.getName(), fromTemplate.getName())
+                || !Objects.equals(existing.getAttributes(), fromTemplate.getAttributes());
     }
 
     private JsonNode parseJsonNode(DeviceTemplateModel.Definition.OutputJsonObject outputJsonObject, String deviceKey, ExchangePayload payload, String parentKey) {
