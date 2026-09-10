@@ -277,6 +277,17 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Listing an integration here is what actually puts it in the application.
+             Adding the module to beaver-iot-integrations' own pom only gets it built and
+             installed; without an entry here its controllers never register, and requests
+             to them fail as "No static resource" rather than anything that points at the
+             real cause. -->
+        <dependency>
+            <groupId>com.milesight.beaveriot.integrations</groupId>
+            <artifactId>edgeai-stream</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- unit test -->
         <!--<dependency>
             <groupId>org.junit.platform</groupId>
